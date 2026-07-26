@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 from pydantic import BaseModel, Field
 from app.services.technical_analysis import TechnicalSummary
+from app.services.gemini_service import GeminiAnalysis
 
 class AnalyzeRequest(BaseModel):
     """A manual request for an analysis-only workflow."""
@@ -22,3 +23,12 @@ class SymbolAnalysisResponse(BaseModel):
     symbol: str
     price: float
     analysis: TechnicalSummary
+
+
+class AIAnalysisResponse(BaseModel):
+    """Combined source data, technical result, and Gemini explanation."""
+
+    symbol: str
+    market_data: dict[str, Any]
+    technical_analysis: dict[str, Any]
+    ai_analysis: GeminiAnalysis

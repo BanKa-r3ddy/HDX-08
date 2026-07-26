@@ -5,6 +5,7 @@ from typing import Any
 
 from app.services.market_data import MarketDataService, MarketHistory
 from app.services.technical_analysis import TechnicalAnalysisService
+from app.services.gemini_service import GeminiService
 from memory.workflow_memory import WorkflowMemory
 from tools.interfaces import NewsTool, StorageTool, TechnicalIndicatorTool
 
@@ -68,9 +69,14 @@ class RiskManagerAgent(AnalysisAgent):
 
 class DecisionAgent(AnalysisAgent):
     """Creates the final research decision."""
-    def __init__(self) -> None: super().__init__("decision")
+    def __init__(self, gemini: GeminiService) -> None:
+        super().__init__("decision")
+        self._gemini = gemini
     def run(self, memory: WorkflowMemory) -> dict[str, Any]:
-        result = {"decision": "hold", "rationale": "Mocked workflow; informational output only", "executable": False}
+        scan = memory.get("scan")
+        ai_analysis = self._gemini.analyze_market({"symbol": memory.symbol, "market_data": scan["quote"], "technical_analysis": scan["technical_analysis"]})
+        result = {"decision": "hold", "rationale": "Analysis-only workflow; no order execution", "executable": False,
+                  "ai_analysis": ai_analysis.model_dump(mode="json")}
         memory.put("decision", result); self.logger.info("Made decision for %s", memory.symbol); return result
 
 

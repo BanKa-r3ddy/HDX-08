@@ -85,6 +85,51 @@ Google ADK and Gemini are included behind an optional, non-executing research-ag
 
 `app/services/technical_analysis.py` provides the pandas/NumPy/`ta` technical-analysis engine.
 
+## Multi-agent architecture
+
+HDX-08 also exposes a dependency-injected multi-agent lifecycle. Each agent receives an `AgentContext`, returns an `AgentResult`, and may safely enrich the context without coupling to a global service.
+
+```mermaid
+flowchart LR
+    P[Planner Agent] --> S[Scanner Agent]
+    S --> T[Technical Agent]
+    T --> D[Decision Agent]
+    D --> M[Memory Agent]
+    M --> R[Final Context]
+    S --> MD[Market Data Service]
+    T --> TA[Technical Analysis Service]
+    D --> G[Gemini Service]
+    M --> DB[(SQLite Memory)]
+```
+
+Run it with:
+
+```powershell
+Invoke-RestMethod -Method Get -Uri http://127.0.0.1:8000/run/AAPL
+```
+
+The endpoint returns the request ID, completed agents, execution duration, market data, technical analysis, and AI explanation. The memory agent stores only request ID, symbol, timestamp, AI summary, confidence, and trend in local SQLite.
+
+### Adding an agent
+
+Create a class in `app/agents/` with a unique `name`, `enabled_by_default = True`, and `run(context) -> AgentResult`. Inject its dependencies through the constructor and add its instance to `build_orchestrator`. The Planner reads the registered enabled agent list, so compatible future agents (for example News, Risk, Macro, or Social Sentiment) participate without changes to the orchestrator itself.
+
+## Gemini market explanation
+
+Add your Google Gemini API key to `.env`:
+
+```text
+GOOGLE_API_KEY=your_key_here
+```
+
+The service uses `google-genai` to explain only the supplied market and technical JSON. It enforces structured JSON output, validates it with Pydantic, retries transient failures, and returns a safe error object if credentials or Gemini are unavailable. It never creates orders or trade instructions.
+
+```powershell
+Invoke-RestMethod -Method Get -Uri http://127.0.0.1:8000/ai-analysis/AAPL
+```
+
+The response contains `market_data`, `technical_analysis`, and `ai_analysis`. AI analysis is informational only and must use `Insufficient Data` where the supplied data cannot support a conclusion.
+
 - `agents/` — seven single-responsibility workflow agents.
 - `tools/` — protocol interfaces and safe local mock adapters.
 - `api/` — FastAPI delivery layer and Pydantic contracts.

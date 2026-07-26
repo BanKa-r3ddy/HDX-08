@@ -16,7 +16,7 @@ class Settings:
 
     database_path: Path = Path(os.getenv("HDX_DATABASE_PATH", "data/hdx08.sqlite3"))
     log_level: str = os.getenv("HDX_LOG_LEVEL", "INFO")
-    gemini_api_key: str | None = os.getenv("GEMINI_API_KEY")
+    google_api_key: str | None = os.getenv("GOOGLE_API_KEY")
 
 
 settings = Settings()
