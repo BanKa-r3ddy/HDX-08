@@ -3,8 +3,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.services.market_data import MarketDataService
 from memory.workflow_memory import WorkflowMemory
-from tools.interfaces import MarketDataTool, NewsTool, StorageTool, TechnicalIndicatorTool
+from tools.interfaces import NewsTool, StorageTool, TechnicalIndicatorTool
 
 from .base import AnalysisAgent
 
@@ -19,10 +20,11 @@ class PlannerAgent(AnalysisAgent):
 
 class ScannerAgent(AnalysisAgent):
     """Collects a market snapshot and contextual headlines."""
-    def __init__(self, market_data: MarketDataTool, news: NewsTool) -> None:
+    def __init__(self, market_data: MarketDataService, news: NewsTool) -> None:
         super().__init__("scanner"); self._market_data = market_data; self._news = news
     def run(self, memory: WorkflowMemory) -> dict[str, Any]:
-        result = {"quote": self._market_data.quote(memory.symbol), "headlines": self._news.headlines(memory.symbol)}
+        quote = self._market_data.get_quote(memory.symbol)
+        result = {"quote": quote.model_dump(mode="json"), "headlines": self._news.headlines(memory.symbol)}
         memory.put("scan", result); self.logger.info("Scanned %s", memory.symbol); return result
 
 
@@ -31,7 +33,11 @@ class SignalAgent(AnalysisAgent):
     def __init__(self, indicators: TechnicalIndicatorTool) -> None:
         super().__init__("signal"); self._indicators = indicators
     def run(self, memory: WorkflowMemory) -> dict[str, Any]:
-        price = float(memory.get("scan")["quote"]["price"])
+        quote = memory.get("scan")["quote"]
+        if "price" not in quote:
+            result = {"direction": "unknown", "confidence": 0.0, "indicators": {}, "mode": "market_data_unavailable"}
+            memory.put("signal", result); self.logger.warning("Signal skipped for %s due to unavailable market data", memory.symbol); return result
+        price = float(quote["price"])
         indicators = self._indicators.calculate([price * 0.98, price * 0.99, price])
         result = {"direction": "neutral", "confidence": 0.5, "indicators": indicators, "mode": "mock"}
         memory.put("signal", result); self.logger.info("Generated signal for %s", memory.symbol); return result
