@@ -43,6 +43,32 @@ Example response:
 
 Quote and historical calls use yfinance, retry transient failures, enforce an eight-second provider timeout, and cache successful responses for 60 seconds. Provider failures return a structured error response rather than crashing the API.
 
+Retrieve a technical summary calculated from six months of daily OHLCV data:
+
+```powershell
+Invoke-RestMethod -Method Get -Uri http://127.0.0.1:8000/analyze/AAPL
+```
+
+Example response:
+
+```json
+{
+  "symbol": "AAPL",
+  "price": 333.02,
+  "analysis": {
+    "trend": "Bullish",
+    "rsi": 62.3,
+    "macd": "Bullish",
+    "volume": "Above Average",
+    "strength": "Strong",
+    "support": 324.4,
+    "resistance": 337.8
+  }
+}
+```
+
+The technical engine calculates SMA (20/50/200), EMA (9/21/50), RSI-14, MACD, Bollinger Bands, ATR-14, VWAP, and 20-period volume average. This is informational analysis only; it does not place trades.
+
 Run the analysis workflow:
 
 ```powershell
@@ -56,6 +82,8 @@ Google ADK and Gemini are included behind an optional, non-executing research-ag
 ## Structure
 
 `app/services/market_data.py` provides the resilient Yahoo Finance adapter and its Pydantic data models.
+
+`app/services/technical_analysis.py` provides the pandas/NumPy/`ta` technical-analysis engine.
 
 - `agents/` — seven single-responsibility workflow agents.
 - `tools/` — protocol interfaces and safe local mock adapters.

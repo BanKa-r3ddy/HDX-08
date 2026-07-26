@@ -49,6 +49,10 @@ class MarketHistory(BaseModel):
     interval: str
     bars: list[HistoricalBar]
 
+    def to_dataframe(self) -> pd.DataFrame:
+        """Convert normalized bars back to canonical lower-case OHLCV data."""
+        return pd.DataFrame([bar.model_dump() for bar in self.bars]).set_index("timestamp")
+
 
 class MarketDataError(BaseModel):
     """Safe, client-facing failure result; expected provider errors are never raised."""

@@ -9,6 +9,9 @@ class UnavailableMarketData:
     def get_quote(self, symbol: str) -> MarketDataError:
         return MarketDataError(symbol=symbol, code="provider_unavailable", error="offline test")
 
+    def get_history(self, symbol: str) -> MarketDataError:
+        return MarketDataError(symbol=symbol, code="provider_unavailable", error="offline test")
+
 def test_workflow_is_analysis_only() -> None:
     result = build_workflow(UnavailableMarketData()).analyze("aapl")
     assert result["symbol"] == "AAPL"

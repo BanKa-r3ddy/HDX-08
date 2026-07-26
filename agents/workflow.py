@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.services.market_data import MarketDataService
+from app.services.market_data import MarketDataService, MarketHistory
+from app.services.technical_analysis import TechnicalAnalysisService
 from memory.workflow_memory import WorkflowMemory
 from tools.interfaces import NewsTool, StorageTool, TechnicalIndicatorTool
 
@@ -20,11 +21,17 @@ class PlannerAgent(AnalysisAgent):
 
 class ScannerAgent(AnalysisAgent):
     """Collects a market snapshot and contextual headlines."""
-    def __init__(self, market_data: MarketDataService, news: NewsTool) -> None:
-        super().__init__("scanner"); self._market_data = market_data; self._news = news
+    def __init__(self, market_data: MarketDataService, technical_analysis: TechnicalAnalysisService, news: NewsTool) -> None:
+        super().__init__("scanner"); self._market_data = market_data; self._technical_analysis = technical_analysis; self._news = news
     def run(self, memory: WorkflowMemory) -> dict[str, Any]:
         quote = self._market_data.get_quote(memory.symbol)
-        result = {"quote": quote.model_dump(mode="json"), "headlines": self._news.headlines(memory.symbol)}
+        history = self._market_data.get_history(memory.symbol)
+        technical_analysis: dict[str, Any]
+        if isinstance(history, MarketHistory):
+            technical_analysis = self._technical_analysis.analyze(history.to_dataframe()).model_dump(mode="json")
+        else:
+            technical_analysis = {"error": history.error, "code": history.code}
+        result = {"quote": quote.model_dump(mode="json"), "technical_analysis": technical_analysis, "headlines": self._news.headlines(memory.symbol)}
         memory.put("scan", result); self.logger.info("Scanned %s", memory.symbol); return result
 
 

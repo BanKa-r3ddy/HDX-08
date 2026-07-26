@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import Any
 from pydantic import BaseModel, Field
+from app.services.technical_analysis import TechnicalSummary
 
 class AnalyzeRequest(BaseModel):
     """A manual request for an analysis-only workflow."""
@@ -13,3 +14,11 @@ class AnalyzeResponse(BaseModel):
     analysis_id: int
     workflow: dict[str, Any]
     disclaimer: str
+
+
+class SymbolAnalysisResponse(BaseModel):
+    """Read-only latest quote and technical summary for a market symbol."""
+
+    symbol: str
+    price: float
+    analysis: TechnicalSummary
