@@ -30,6 +30,14 @@ class MarketAnalysisInput(BaseModel):
     symbol: str
     market_data: dict[str, Any]
     technical_analysis: dict[str, Any]
+    news_analysis: dict[str, Any] | None = None
+
+
+class NewsAnalysisInput(BaseModel):
+    """News-only data boundary passed to Gemini."""
+
+    symbol: str
+    news: list[dict[str, Any]]
 
 
 class GeminiAnalysis(BaseModel):
@@ -54,6 +62,29 @@ class GeminiAnalysisError(BaseModel):
 
 
 GeminiResult: TypeAlias = GeminiAnalysis | GeminiAnalysisError
+
+
+class NewsAnalysis(BaseModel):
+    """Validated sentiment explanation based exclusively on supplied articles."""
+
+    model_config = ConfigDict(frozen=True)
+    overall_sentiment: Literal["Bullish", "Bearish", "Neutral", "Insufficient Data"]
+    confidence: int = Field(ge=0, le=100)
+    summary: str
+    positive_events: list[str]
+    negative_events: list[str]
+    watch_items: list[str]
+
+
+class NewsAnalysisError(BaseModel):
+    """Safe error returned when news analysis cannot be generated."""
+
+    model_config = ConfigDict(frozen=True)
+    error: str
+    code: Literal["api_key_missing", "provider_unavailable", "invalid_model_response", "invalid_input"]
+
+
+NewsGeminiResult: TypeAlias = NewsAnalysis | NewsAnalysisError
 
 
 class ContentGenerator(Protocol):
@@ -104,16 +135,44 @@ class GeminiService:
             self._logger.error("gemini_provider_unavailable", extra={"symbol": request.symbol, "error": str(exc)})
             return GeminiAnalysisError(code="provider_unavailable", error="Gemini is currently unavailable")
 
+    def analyze_news(self, payload: NewsAnalysisInput | dict[str, Any]) -> NewsGeminiResult:
+        """Return structured article-grounded sentiment without using external context."""
+        try:
+            request = payload if isinstance(payload, NewsAnalysisInput) else NewsAnalysisInput.model_validate(payload)
+        except ValidationError as exc:
+            self._logger.warning("gemini_news_invalid_input", extra={"error": str(exc)})
+            return NewsAnalysisError(code="invalid_input", error="News-analysis input is invalid")
+        if self._client is None and not self._api_key:
+            return NewsAnalysisError(code="api_key_missing", error="GOOGLE_API_KEY is not configured")
+        instruction = SYSTEM_INSTRUCTION + "\nFor news analysis, base every event only on the supplied article list."
+        try:
+            response = self._generate_structured(request, NewsAnalysis, instruction)
+            raw = getattr(response, "parsed", None)
+            result = NewsAnalysis.model_validate(raw if raw is not None else json.loads(response.text))
+            self._logger.info("gemini_news_completed", extra={"symbol": request.symbol, "articles": len(request.news)})
+            return result
+        except ValidationError as exc:
+            self._logger.error("gemini_news_invalid_response", extra={"symbol": request.symbol, "error": str(exc)})
+            return NewsAnalysisError(code="invalid_model_response", error="Gemini returned an invalid news analysis response")
+        except (json.JSONDecodeError, TypeError, AttributeError) as exc:
+            return NewsAnalysisError(code="invalid_model_response", error="Gemini did not return valid JSON news analysis")
+        except Exception as exc:
+            self._logger.error("gemini_news_unavailable", extra={"symbol": request.symbol, "error": str(exc)})
+            return NewsAnalysisError(code="provider_unavailable", error="Gemini is currently unavailable")
+
     def _generate_with_retry(self, request: MarketAnalysisInput) -> Any:
+        return self._generate_structured(request, GeminiAnalysis, SYSTEM_INSTRUCTION)
+
+    def _generate_structured(self, request: MarketAnalysisInput | NewsAnalysisInput, response_schema: type[BaseModel], instruction: str) -> Any:
         client = self._client or genai.Client(
             api_key=self._api_key,
             http_options=types.HttpOptions(timeout=int(self._timeout_seconds * 1000)),
         ).models
         config = types.GenerateContentConfig(
-            system_instruction=SYSTEM_INSTRUCTION,
+            system_instruction=instruction,
             temperature=0.2,
             response_mime_type="application/json",
-            response_schema=GeminiAnalysis,
+            response_schema=response_schema,
         )
         content = json.dumps(request.model_dump(mode="json"), separators=(",", ":"))
         last_error: Exception | None = None

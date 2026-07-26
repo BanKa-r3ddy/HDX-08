@@ -16,6 +16,8 @@ class AgentContext(BaseModel):
     symbol: str
     market_data: dict[str, Any] | None = None
     technical_analysis: dict[str, Any] | None = None
+    news: list[dict[str, Any]] = Field(default_factory=list)
+    news_analysis: dict[str, Any] | None = None
     ai_analysis: dict[str, Any] | None = None
     memory: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)

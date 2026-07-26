@@ -25,7 +25,7 @@ class DecisionAgent:
             updated.errors.append(error)
             return AgentResult(status="skipped", messages=[error], errors=[error], updated_context=updated)
         result = self._gemini.analyze_market({"symbol": updated.symbol, "market_data": updated.market_data,
-                                              "technical_analysis": updated.technical_analysis})
+                                              "technical_analysis": updated.technical_analysis, "news_analysis": updated.news_analysis})
         if isinstance(result, GeminiAnalysisError):
             error = f"Gemini analysis: {result.error}"
             updated.ai_analysis = result.model_dump(mode="json")
