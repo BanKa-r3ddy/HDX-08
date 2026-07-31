@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import logging
+import json
 from pathlib import Path
 import sqlite3
 
@@ -29,11 +30,12 @@ class MemoryAgent:
         confidence = ai.get("confidence")
         trend = technical.get("summary", {}).get("trend", "Insufficient Data")
         timestamp = datetime.now(timezone.utc).isoformat()
+        completed_trades = json.dumps(updated.metadata.get("completed_trades", []))
         try:
             with sqlite3.connect(self._database_path) as connection:
                 cursor = connection.execute(
-                    "INSERT INTO agent_memory(request_id, symbol, timestamp, ai_summary, confidence, trend) VALUES (?, ?, ?, ?, ?, ?)",
-                    (updated.request_id, updated.symbol, timestamp, summary, confidence, trend),
+                    "INSERT INTO agent_memory(request_id, symbol, timestamp, ai_summary, confidence, trend, completed_trades) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (updated.request_id, updated.symbol, timestamp, summary, confidence, trend, completed_trades),
                 )
             updated.memory["record_id"] = int(cursor.lastrowid)
             updated.memory["timestamp"] = timestamp
@@ -51,5 +53,8 @@ class MemoryAgent:
             connection.execute(
                 "CREATE TABLE IF NOT EXISTS agent_memory ("
                 "id INTEGER PRIMARY KEY, request_id TEXT NOT NULL, symbol TEXT NOT NULL, "
-                "timestamp TEXT NOT NULL, ai_summary TEXT NOT NULL, confidence INTEGER, trend TEXT NOT NULL)"
+                "timestamp TEXT NOT NULL, ai_summary TEXT NOT NULL, confidence INTEGER, trend TEXT NOT NULL, completed_trades TEXT NOT NULL DEFAULT '[]')"
             )
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(agent_memory)")}
+            if "completed_trades" not in columns:
+                connection.execute("ALTER TABLE agent_memory ADD COLUMN completed_trades TEXT NOT NULL DEFAULT '[]'")

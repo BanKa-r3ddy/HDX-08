@@ -8,11 +8,15 @@ import sqlite3
 from fastapi.testclient import TestClient
 
 from api.app import create_app
-from app.agents import DecisionAgent, MemoryAgent, PlannerAgent, ScannerAgent, TechnicalAgent
+from app.agents import DecisionAgent, MemoryAgent, NewsAgent, PlannerAgent, RiskAgent, ScannerAgent, TechnicalAgent
 from app.orchestrator import Orchestrator
 from app.services.gemini_service import GeminiAnalysis
 from app.services.market_data import HistoricalBar, MarketHistory, MarketQuote
 from app.services.technical_analysis import TechnicalAnalysisService
+from app.services.news_service import NewsArticle, NewsService
+from app.services.paper_trading_service import PaperTradingService, TradeManager
+from app.services.risk_service import RiskRepository, RiskService
+from app.models.portfolio import RiskConfig
 from main import build_workflow
 
 
@@ -40,20 +44,36 @@ class StubGemini:
                               strengths=["Bullish EMA alignment"], weaknesses=["Market data can change"],
                               risk_level="Medium", reasoning=["Trend is bullish", "Volume is above average"])
 
+    def analyze_news(self, _: object):
+        from app.services.gemini_service import NewsAnalysis
+        return NewsAnalysis(overall_sentiment="Neutral", confidence=50, summary="Insufficient Data", positive_events=[], negative_events=[], watch_items=[])
+
+
+class StubNewsProvider:
+    """News provider double for the orchestration lifecycle."""
+
+    name = "stub_news"
+
+    def fetch(self, query: str, limit: int) -> list[NewsArticle]:
+        return [NewsArticle(title="AAPL context", source="Test", published_at=datetime.now(timezone.utc),
+                            url="https://example.com/aapl", summary="Test article")]
+
 
 def build_test_orchestrator(database_path: Path) -> Orchestrator:
     """Build a fully injected orchestrator with no network dependencies."""
     market_data = StubMarketData()
     technical = TechnicalAnalysisService()
+    paper = PaperTradingService(TradeManager(database_path.parent / "orchestrator-paper.sqlite3"))
+    risk = RiskService(paper, RiskRepository(database_path.parent / "orchestrator-risk.sqlite3"), RiskConfig())
     return Orchestrator([PlannerAgent(), ScannerAgent(market_data), TechnicalAgent(technical),
-                         DecisionAgent(StubGemini()), MemoryAgent(database_path)])
+                         NewsAgent(NewsService(providers=[StubNewsProvider()]), StubGemini()), DecisionAgent(StubGemini()), RiskAgent(risk), MemoryAgent(database_path)])
 
 
 def test_orchestrator_runs_full_lifecycle_and_persists_memory(tmp_path: Path) -> None:
     database_path = tmp_path / "agent-memory.sqlite3"
     result = build_test_orchestrator(database_path).run("aapl", request_id="request-123")
     assert result.request_id == "request-123"
-    assert result.completed_agents == ["Planner", "Scanner", "Technical", "Decision", "Memory"]
+    assert result.completed_agents == ["Planner", "Scanner", "Technical", "News", "Decision", "Risk", "Memory"]
     assert result.result["market_data"]["symbol"] == "AAPL"
     assert result.result["technical_analysis"]["summary"]["trend"] == "Bullish"
     assert result.result["ai_analysis"]["confidence"] == 84
@@ -66,8 +86,12 @@ def test_orchestrator_runs_full_lifecycle_and_persists_memory(tmp_path: Path) ->
 def test_run_endpoint_returns_public_final_context(tmp_path: Path) -> None:
     market_data = StubMarketData()
     orchestrator = build_test_orchestrator(tmp_path / "endpoint-memory.sqlite3")
-    response = TestClient(create_app(build_workflow(market_data), market_data, TechnicalAnalysisService(), StubGemini(), orchestrator)).get("/run/AAPL")
+    client = TestClient(create_app(build_workflow(market_data), market_data, TechnicalAnalysisService(), StubGemini(), orchestrator))
+    response = client.get("/run/AAPL")
     assert response.status_code == 200
     payload = response.json()
-    assert payload["completed_agents"] == ["Planner", "Scanner", "Technical", "Decision", "Memory"]
+    assert payload["completed_agents"] == ["Planner", "Scanner", "Technical", "News", "Decision", "Risk", "Memory"]
     assert payload["result"]["ai_analysis"]["overall_sentiment"] == "Bullish"
+    full_response = client.get("/full-analysis/AAPL")
+    assert full_response.status_code == 200
+    assert full_response.json()["news_analysis"]["overall_sentiment"] == "Neutral"

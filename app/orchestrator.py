@@ -62,7 +62,8 @@ class Orchestrator:
         self._logger.info("orchestration_completed", extra={"request_id": context.request_id, "symbol": context.symbol, "duration_ms": elapsed, "errors": len(context.errors)})
         return OrchestrationResult(request_id=context.request_id, symbol=context.symbol, completed_agents=completed,
                                    execution_time_ms=elapsed,
-                                           result={"market_data": context.market_data or {}, "technical_analysis": context.technical_analysis or {},
+                                   result={"market_data": context.market_data or {}, "technical_analysis": context.technical_analysis or {},
+                                           "news": context.news, "news_analysis": context.news_analysis or {},
                                            "ai_analysis": context.ai_analysis or {}}, errors=context.errors)
 
     def _execute(self, agent: AnalysisAgent, context: AgentContext) -> AgentResult:

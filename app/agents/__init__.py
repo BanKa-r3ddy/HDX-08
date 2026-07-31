@@ -7,5 +7,8 @@ from .technical_agent import TechnicalAgent
 from .news_agent import NewsAgent
 from .decision_agent import DecisionAgent
 from .memory_agent import MemoryAgent
+from .paper_trading_agent import PaperTradingAgent
+from .backtest_agent import BacktestAgent
+from .risk_agent import RiskAgent
 
-__all__ = ["AgentContext", "AgentResult", "PlannerAgent", "ScannerAgent", "TechnicalAgent", "NewsAgent", "DecisionAgent", "MemoryAgent"]
+__all__ = ["AgentContext", "AgentResult", "PlannerAgent", "ScannerAgent", "TechnicalAgent", "NewsAgent", "DecisionAgent", "RiskAgent", "PaperTradingAgent", "MemoryAgent", "BacktestAgent"]

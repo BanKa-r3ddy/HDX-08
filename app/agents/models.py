@@ -19,6 +19,10 @@ class AgentContext(BaseModel):
     news: list[dict[str, Any]] = Field(default_factory=list)
     news_analysis: dict[str, Any] | None = None
     ai_analysis: dict[str, Any] | None = None
+    open_positions: list[dict[str, Any]] = Field(default_factory=list)
+    portfolio_value: float = 100_000.0
+    cash_balance: float = 100_000.0
+    daily_pnl: float = 0.0
     memory: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
     errors: list[str] = Field(default_factory=list)
